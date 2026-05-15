@@ -1,0 +1,10 @@
+{
+  "name": "hyperliquid-trade",
+  "version": "0.1.0",
+  "description": "Signed write-side Hyperliquid trading actions for Hermes Agent",
+  "author": "Nassim Dehouche / ChatGPT",
+  "license": "MIT",
+  "entrypoints": [
+    "scripts/hyperliquid_trade.py"
+  ]
+}
