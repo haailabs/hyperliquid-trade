@@ -1,8 +1,12 @@
-# Hyperliquid Trade
-
-Write-side Hyperliquid trading skill for Hermes.
-
-This skill complements the existing read-only `hyperliquid` skill. Use the existing official Hyperliquid skill for market data, account state, positions, fills, candles, and open-order review. Use this custom skill only for signed exchange actions that change account state.
+---
+name: hyperliquid-trade
+description: Execute Hyperliquid trading actions from Hermes, including market, limit, and trigger orders, cancellations, order modifications, leverage updates, isolated margin updates, position closes, and scheduled cancels. Use when the user wants to trade, manage positions, or perform signed Hyperliquid execution through Hermes.
+license: MIT
+compatibility: Requires Python 3.10+, network access, hyperliquid-python-sdk, and Hyperliquid account environment variables.
+metadata:
+  author: HAAI Labs
+  repo: https://github.com/haailabs/hyperliquid-trade
+---
 
 ## Scope
 
