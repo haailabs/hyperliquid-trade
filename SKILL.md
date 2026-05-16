@@ -1,292 +1,288 @@
 ---
 name: hyperliquid-trade
-description: Execute Hyperliquid trading actions from Hermes, including market, limit, and trigger orders, cancellations, order modifications, leverage updates, isolated margin updates, position closes, and scheduled cancels. Use when the user wants to trade, manage positions, or perform signed Hyperliquid execution through Hermes.
+description: Execute Hyperliquid trading actions from Hermes, including market, limit, and trigger orders, cancellations, order modifications, leverage updates, isolated margin updates, position closes, and scheduled cancels. Use when the user wants to trade, manage positions, or perform Hyperliquid execution through Hermes.
 license: MIT
-compatibility: Requires Python 3.10+, network access, hyperliquid-python-sdk, and Hyperliquid account environment variables.
+compatibility: Requires Python 3.10+, network access, hyperliquid-python-sdk, and configured Hyperliquid environment variables.
 metadata:
   author: HAAI Labs
   repo: https://github.com/haailabs/hyperliquid-trade
 ---
+
 # Hyperliquid Trade Skill
 
 Use this skill when the user wants Hermes to execute trading actions on Hyperliquid.
 
-This skill exposes terminal commands for:
+This skill provides a Hermes-native command surface for Hyperliquid trader workflows:
 
-- placing market orders
-- placing limit orders
-- placing trigger orders
-- canceling orders
-- canceling by CLOID
-- modifying orders
-- setting leverage
-- updating isolated margin
-- closing positions
-- scheduling cancels
+- market orders
+- limit orders
+- trigger orders
+- order cancellations
+- cancel by CLOID
+- order modifications
+- leverage updates
+- isolated margin updates
+- position closes
+- scheduled cancels
 
-Do not use this skill for passive market/account inspection unless that information is needed before execution.
+Do not use this skill for general market browsing unless that information is required to prepare or validate an execution command.
 
 ## Command runner
 
-Run commands through:
+Run commands through the skill script:
+
+```bash
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py <command> [args]
+```
+
+If the executable wrapper is installed, commands may also be run through:
 
 ```bash
 $HERMES_HOME/skills/hyperliquid-trade/scripts/hlt <command> [args]
-## Scope
-
-Supported write actions:
-
-- Place limit orders
-- Place aggressive IOC market-style orders
-- Place reduce-only trigger orders for stop-loss / take-profit
-- Cancel by order ID
-- Cancel by client order ID (`cloid`)
-- Modify a resting order
-- Update leverage
-- Add/remove isolated margin
-- Close an existing position at market
-- Schedule or clear Hyperliquid dead-man cancel
-
-Do **not** use this skill for withdrawals, transfers, bridges, or API-wallet creation.
-
-## Security rules
-
-Trading actions are irreversible and may lose money.
-
-Before calling this skill, Hermes must have an explicit user instruction with enough detail to determine:
-
-- coin, for example `BTC` or `ETH`
-- action, for example buy/sell/long/short/close/cancel
-- size or a safe way to derive size from the current position using the read-only Hyperliquid skill
-- order type, for example market, limit, stop-loss, take-profit
-- price or trigger price when required
-
-Never invent size, side, leverage, price, or trigger price.
-
-For stop-loss/take-profit on an existing position, first use the read-only Hyperliquid skill to inspect the position. If the user says “set a stop loss on my BTC long at 95000” and the current BTC position is long 0.01, place a reduce-only sell trigger for size 0.01. If the current BTC position is short, use a reduce-only buy trigger.
-
-For leverage changes, the user must explicitly specify the leverage and whether it is cross or isolated unless their wording makes it unambiguous.
+```
 
 ## Required environment
 
-The script reads secrets from environment variables and from `.env` files in the current directory and `$HERMES_HOME/.env`.
-
-Required:
+The following environment variables must be configured before using the skill:
 
 ```bash
 PRIVATE_KEY=0x...
-```
-
-Recommended when `PRIVATE_KEY` is an API wallet key:
-
-```bash
-HL_ACCOUNT_ADDRESS=0x...   # main wallet public address, not the API-wallet address
+HL_ACCOUNT_ADDRESS=0x...
+HL_NETWORK=mainnet
 ```
 
 Optional:
 
 ```bash
-HL_NETWORK=mainnet         # mainnet or testnet
-HL_VAULT_ADDRESS=0x...     # subaccount/vault address if trading on one
+HL_VAULT_ADDRESS=0x...
+HL_EXPIRES_AFTER_MS=...
 ```
 
-Important: Hyperliquid API wallets sign with the API-wallet private key, but SDK configuration should still identify the main account address as `account_address`.
+Rules:
 
-## Installation
+- Never print, log, expose, or repeat `PRIVATE_KEY`.
+- `HL_NETWORK` should be either `mainnet` or `testnet`.
+- `HL_ACCOUNT_ADDRESS` should be the Hyperliquid account address used for execution.
+- If using a vault, set `HL_VAULT_ADDRESS`.
 
-From this skill directory:
+## Execution policy
+
+Default to dry-run unless the user explicitly requests live execution.
+
+For live execution, include:
 
 ```bash
-python -m pip install -r requirements.txt
-chmod +x scripts/hyperliquid_trade.py
+--yes
 ```
 
-Copy or keep this folder under:
+When the user asks to place, cancel, modify, close, or otherwise execute a trading action, make the command explicit before running it whenever practical.
 
-```bash
-$HERMES_HOME/skills/hyperliquid-trade/
+If a command returns:
+
+```json
+{"ok": false}
 ```
 
-## Command contract
+report the `error` and `detail` fields plainly.
 
-All state-changing commands require `--yes`. Without `--yes`, the script returns a normalized dry-run plan and refuses to submit the transaction.
+Do not invent order status, fills, balances, or execution results. Only report what the command returns.
 
-Base command:
+## Common commands
+
+### Check skill status
 
 ```bash
-python $HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py <command> [args] --yes
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py status
 ```
 
-Common optional args:
+### Place a market order
+
+Dry run:
 
 ```bash
---network mainnet|testnet
---account-address 0x...
---vault-address 0x...
---expires-after-ms 1710000000000
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py order market BTC buy 0.01
 ```
 
-## Examples
-
-### Market long
-
-User: “Long 0.01 BTC at market.”
+Live execution:
 
 ```bash
-python $HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py market \
-  --coin BTC \
-  --side buy \
-  --size 0.01 \
-  --slippage 0.01 \
-  --yes
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py order market BTC buy 0.01 --yes
 ```
 
-### Limit order
+### Place a limit order
 
-User: “Place a post-only buy for 0.01 BTC at 95000.”
+Dry run:
 
 ```bash
-python $HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py limit \
-  --coin BTC \
-  --side buy \
-  --size 0.01 \
-  --price 95000 \
-  --tif Alo \
-  --yes
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py order limit BTC buy 0.01 65000
 ```
 
-### Stop loss for an existing long
-
-First inspect the position using the read-only Hyperliquid skill. If BTC long size is `0.01`:
+Live execution:
 
 ```bash
-python $HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py trigger \
-  --coin BTC \
-  --side sell \
-  --size 0.01 \
-  --trigger-price 95000 \
-  --tpsl sl \
-  --reduce-only \
-  --yes
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py order limit BTC buy 0.01 65000 --yes
 ```
 
-### Take profit for an existing short
-
-If ETH short size is `0.5`:
+### Place a trigger order
 
 ```bash
-python $HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py trigger \
-  --coin ETH \
-  --side buy \
-  --size 0.5 \
-  --trigger-price 2800 \
-  --tpsl tp \
-  --reduce-only \
-  --yes
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py order trigger BTC buy 0.01 65000 --trigger-price 64000
 ```
 
-### Cancel by order id
+### Cancel an order
 
 ```bash
-python $HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py cancel \
-  --coin BTC \
-  --oid 123456789 \
-  --yes
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py cancel BTC <order_id>
 ```
 
-### Cancel by client order id
+Live execution:
 
 ```bash
-python $HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py cancel-cloid \
-  --coin BTC \
-  --cloid 0x1234567890abcdef1234567890abcdef \
-  --yes
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py cancel BTC <order_id> --yes
+```
+
+### Cancel by CLOID
+
+```bash
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py cancel-cloid BTC <cloid>
+```
+
+Live execution:
+
+```bash
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py cancel-cloid BTC <cloid> --yes
 ```
 
 ### Modify an order
 
 ```bash
-python $HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py modify \
-  --coin BTC \
-  --oid 123456789 \
-  --side buy \
-  --size 0.01 \
-  --price 94000 \
-  --tif Gtc \
-  --yes
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py modify BTC <order_id> --price 65000 --size 0.01
 ```
 
-### Update leverage
+Live execution:
 
 ```bash
-python $HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py leverage \
-  --coin BTC \
-  --leverage 5 \
-  --margin-mode cross \
-  --yes
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py modify BTC <order_id> --price 65000 --size 0.01 --yes
 ```
 
-### Add isolated margin
+### Set leverage
 
 ```bash
-python $HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py isolated-margin \
-  --coin BTC \
-  --amount 25 \
-  --yes
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py leverage BTC 5
 ```
 
-To remove isolated margin, use a negative amount.
-
-### Close position at market
-
-The SDK detects current side and size unless `--size` is supplied.
+Live execution:
 
 ```bash
-python $HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py close-market \
-  --coin BTC \
-  --slippage 0.01 \
-  --yes
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py leverage BTC 5 --yes
 ```
 
-### Dead-man cancel
+### Update isolated margin
 
-Schedule cancel-all 60 seconds from now:
+Add margin:
 
 ```bash
-python $HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py schedule-cancel \
-  --seconds 60 \
-  --yes
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py margin BTC add 10
 ```
 
-Clear scheduled cancel:
+Remove margin:
 
 ```bash
-python $HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py schedule-cancel \
-  --clear \
-  --yes
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py margin BTC remove 10
 ```
 
-## Output
+Live execution:
 
-The script always prints JSON. On success:
-
-```json
-{
-  "ok": true,
-  "command": "limit",
-  "network": "mainnet",
-  "submitted": true,
-  "result": {}
-}
+```bash
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py margin BTC add 10 --yes
 ```
 
-On refusal or validation error:
+### Close a position
+
+```bash
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py close BTC
+```
+
+Live execution:
+
+```bash
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py close BTC --yes
+```
+
+### Schedule cancel
+
+```bash
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py schedule-cancel --time-ms <timestamp_ms>
+```
+
+Live execution:
+
+```bash
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hyperliquid_trade.py schedule-cancel --time-ms <timestamp_ms> --yes
+```
+
+## Good behavior for agents
+
+When using this skill:
+
+1. Identify the intended trading action.
+2. Identify the coin, side, size, price, trigger price, order ID, leverage, or margin amount required by that action.
+3. Refuse to guess missing execution-critical values.
+4. Prefer dry-run unless live execution is explicitly requested.
+5. Use `--yes` only when the user clearly requests live execution.
+6. Report command output accurately.
+7. If execution fails, report `error` and `detail` plainly.
+8. Never expose secrets.
+
+## Examples of user requests that should activate this skill
+
+Use this skill when the user says things like:
+
+- “Place a limit buy on BTC.”
+- “Cancel my ETH order.”
+- “Modify this order to 0.02 BTC at 65000.”
+- “Set BTC leverage to 5x.”
+- “Add margin to my SOL position.”
+- “Close my BTC position.”
+- “Schedule cancels.”
+- “Run a dry-run market order.”
+- “Execute this Hyperliquid trade through Hermes.”
+
+## Examples of requests that need clarification
+
+Ask for missing details when the user says:
+
+- “Buy BTC” without size or order type.
+- “Cancel my order” without order ID, CLOID, or enough context.
+- “Close my position” without the coin.
+- “Set leverage” without coin or leverage value.
+- “Add margin” without coin or amount.
+
+## Error handling
+
+If the script returns JSON with `ok: false`, summarize only the relevant failure fields.
+
+Example:
 
 ```json
 {
   "ok": false,
-  "error": "state-changing commands require --yes"
+  "error": "missing_env",
+  "detail": "PRIVATE_KEY is not set"
 }
 ```
 
-Hermes should relay the essential result to the user, including any returned order id, fill status, or exchange error.
+Report:
+
+```text
+The command failed: missing_env.
+Detail: PRIVATE_KEY is not set.
+```
+
+Do not add speculative causes unless the command output supports them.
+
+## Safety
+
+This skill can execute live trading actions. Treat all live commands as irreversible unless the exchange response says otherwise.
+
+Never use `--yes` unless live execution is explicitly requested.
