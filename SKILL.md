@@ -7,7 +7,31 @@ metadata:
   author: HAAI Labs
   repo: https://github.com/haailabs/hyperliquid-trade
 ---
+# Hyperliquid Trade Skill
 
+Use this skill when the user wants Hermes to execute trading actions on Hyperliquid.
+
+This skill exposes terminal commands for:
+
+- placing market orders
+- placing limit orders
+- placing trigger orders
+- canceling orders
+- canceling by CLOID
+- modifying orders
+- setting leverage
+- updating isolated margin
+- closing positions
+- scheduling cancels
+
+Do not use this skill for passive market/account inspection unless that information is needed before execution.
+
+## Command runner
+
+Run commands through:
+
+```bash
+$HERMES_HOME/skills/hyperliquid-trade/scripts/hlt <command> [args]
 ## Scope
 
 Supported write actions:
